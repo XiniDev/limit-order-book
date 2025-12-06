@@ -25,6 +25,51 @@ def test_no_crossing_no_trades():
     assert ob.get_trades() == []
 
 
+def test_empty_book_best_bid_ask_are_none():
+    """
+    Scenario:
+    - On a completely empty book, best_bid() and best_ask() must return None.
+    - This makes the API behaviour explicit for the empty state.
+    - Then add crossing orders (BUY at 10.0, SELL at 9.0), book should still be empty.
+    """
+    ob = make_book()
+
+    assert ob.best_bid() is None
+    assert ob.best_ask() is None
+
+    ob.add_limit_order(Side.BUY, price=10.0, quantity=50)
+    ob.add_limit_order(Side.SELL, price=9.0, quantity=50)
+
+    assert ob.best_bid() is None
+    assert ob.best_ask() is None
+
+
+def test_crossing_limit_sell():
+    """
+    Scenario:
+    - Add a BUY at 10.0 for 100 units.
+    - Then add a SELL at 9.5 for 100 units.
+    - Prices cross and quantities match exactly -> one full trade.
+    - Book should be empty after, trades recorded correctly (full quantity).
+    """
+    ob = make_book()
+
+    buy_id = ob.add_limit_order(Side.BUY, price=10.0, quantity=100)
+    sell_id = ob.add_limit_order(Side.SELL, price=9.5, quantity=100)
+
+    assert ob.best_bid() is None
+    assert ob.best_ask() is None
+
+    trades = ob.get_trades()
+    assert len(trades) == 1
+    t = trades[0]
+
+    assert t.buy_order_id == buy_id
+    assert t.sell_order_id == sell_id
+    assert t.price == pytest.approx(10.0)
+    assert t.quantity == 100
+
+
 def test_full_fill_crossing_limit_buy():
     """
     Scenario:
@@ -74,7 +119,6 @@ def test_partial_fill_limit_buy():
     assert t.sell_order_id == sell_id
     assert t.price == pytest.approx(10.0)
     assert t.quantity == 100
-
 
 def test_multi_level_fill():
     """
@@ -141,6 +185,22 @@ def test_fifo_within_price_level():
 
     assert ob.best_ask() == (10.0, 50)
     assert ob.best_bid() is None
+
+
+def test_cancel_unknown_order_returns_false():
+    """
+    Scenario:
+    - Attempt to cancel an order_id that does not exist in the book.
+    - cancel_order should return False and not throw.
+    """
+    ob = make_book()
+
+    assert ob.cancel_order(9999) is False
+
+    real_id = ob.add_limit_order(Side.BUY, price=10.0, quantity=100)
+    assert ob.cancel_order(real_id + 1) is False
+
+    assert ob.best_bid() == (10.0, 100)
 
 
 def test_cancel_order_removes_correct_node():
