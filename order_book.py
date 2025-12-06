@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 import heapq
 import itertools
 import time
@@ -307,6 +307,9 @@ class OrderBook:
         Match incoming order against the opposite side until it is fully filled,
         book is empty, or price limits are violated.
         """
+
+        price_cmp: Callable[[float], bool]
+
         if incoming.side == Side.BUY:
             price_cmp = lambda best_price: (
                 incoming.price is None or best_price <= incoming.price
