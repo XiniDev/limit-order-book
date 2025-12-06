@@ -1,60 +1,153 @@
 # Simple Limit Order Book (Python)
 
-This project implements a **high-performance limit order book (LOB)** in Python,
-featuring:
+This project implements a **single-instrument limit order book (LOB)** in Python with:
 
-- **Price–time priority**  
+- **Price–time priority** (best price first, FIFO within each price level)  
 - **Doubly linked lists** for O(1) order cancellation  
 - **Heaps** for fast best bid/ask lookup  
-- **Lazy cleanup** of stale price levels  
-- Support for **limit orders**, **market orders**, and **FIFO matching**
+- Support for **limit orders** and **market orders**  
+- A growing **pytest test suite** that specifies the matching behaviour
 
-The structure closely resembles real exchange matching engines and is fully
-suitable for educational, simulation, and interview preparation purposes.
+The structure mirrors how real matching engines manage price levels and queues, and is suitable for **educational use**, **simulation**, and **quant dev interview prep**.
 
 ---
 
 ## 📦 Features
 
-- **Limit orders**: Stored at price levels in FIFO order  
-- **Market orders**: Match against best available prices  
-- **O(1) cancellation** using node pointers  
-- **Efficient matching** using per-price linked lists  
-- **Bid/ask heaps** for fast top-of-book access  
-- **Depth queries** for order book snapshots  
+- **Limit orders**
+  - Stored at per-price queues in strict FIFO order  
+  - Matched against the opposite side when prices cross  
+
+- **Market orders**
+  - Execute immediately against the best available prices  
+  - Any unfilled quantity is discarded (no resting market orders)
+
+- **Efficient cancellation**
+  - O(1) cancel by unlinking from a doubly linked list using a stored node pointer
+
+- **Efficient price discovery**
+  - `bid_heap`: max-heap (implemented as a min-heap over negative prices)  
+  - `ask_heap`: min-heap  
+  - Fast best bid / best ask lookups
+
+- **Book queries**
+  - `best_bid()`, `best_ask()`  
+  - `get_depth(side, levels)` for simple depth snapshots  
+  - `get_trades()` for a full trade log
 
 ---
 
 ## 🧠 Core Data Structures
 
-| Component        | Purpose |
-|------------------|---------|
-| `PriceLevel`     | Doubly linked list of resting orders at a given price |
-| `OrderNode`      | Represents a single order within the price-level queue |
-| `bid_heap`       | Max-heap (via negative numbers) for fast best bid lookup |
-| `ask_heap`       | Min-heap for fast best ask lookup |
-| `order_map`      | Maps order IDs → O(1) cancel via stored node pointer |
+| Component    | Purpose |
+|-------------|---------|
+| `Order`     | Immutable order metadata: side, price, quantity, timestamp |
+| `Trade`     | Executed trade record between a buy and a sell order |
+| `OrderNode` | Node in a doubly linked list at a single price level |
+| `PriceLevel`| Holds `head`/`tail` of the linked list for FIFO matching |
+| `bids`/`asks` | `Dict[price, PriceLevel]` storing per-price queues |
+| `bid_heap`  | Heap of (negative) bid prices → efficient best bid lookup |
+| `ask_heap`  | Heap of ask prices → efficient best ask lookup |
+| `order_map` | `order_id → (side, price, OrderNode)` for O(1) cancellation |
+
+**Design choice:**  
+Heaps store **only prices**, while linked lists store **orders per price**. This keeps heaps small and preserves price–time priority.
 
 ---
 
 ## ▶️ Example Usage
 
-```python main.py```
+Run the demo script:
+
+```bash
+python main.py
+```
+
+Example output (simplified):
+
+```text
+Initial book:
+Best bid: (99.0, 150)
+Best ask: (101.0, 100)
+BIDS: [(99.0, 150), (98.0, 250)]
+ASKS: [(101.0, 100), (102.0, 200)]
+----------------------------------------
+After aggressive buy:
+Best bid: (99.0, 150)
+Best ask: (102.0, 120)
+BIDS: [(99.0, 150), (98.0, 250)]
+ASKS: [(102.0, 120)]
+----------------------------------------
+Trades:
+Trade(buy_order_id=5, sell_order_id=1, price=101.0, quantity=100, ...)
+Trade(buy_order_id=5, sell_order_id=2, price=102.0, quantity=80, ...)
+```
+
+This shows:
+
+* Initial resting bids/asks at multiple price levels
+* An “aggressive” buy order that crosses the spread and matches multiple levels
+* Resulting trades and updated book state
+
+---
+
+## ✅ Tests (pytest)
+
+Tests live in `test_order_book.py` and cover:
+
+* Non-crossing orders (no trades, just resting)
+* Full fills and partial fills
+* Multi-level matching (sweeping several price levels)
+* FIFO behaviour within a single price level
+* Order cancellation and its impact on subsequent matches
+* Market-order behaviour (including when the book runs out of liquidity)
+
+### Running the tests
+
+1. (Optional but recommended) Create and activate a virtualenv.
+
+2. Install dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Run pytest:
+
+   ```bash
+   pytest -q
+   ```
+
+If everything is set up correctly, all tests should pass and serve as a **specification** for the order book’s behaviour.
 
 ---
 
 ## 📁 Project Structure
 
 ```text
-order_book.py   # Main LOB implementation
-main.py         # Example usage & demonstration
+order_book.py       # Core limit order book implementation
+main.py             # Example usage / demo script
+test_order_book.py  # Pytest suite covering core matching logic
+requirements.txt    # Python dependencies (e.g. pytest)
 ```
 
-## 📝 Notes
+---
 
-- **Heaps may contain stale prices** after orders are matched or cancelled.  
-  This is intentional: removing arbitrary heap elements is **O(n)**.  
-  Instead, stale values are removed **lazily** when they reach the top.
+## 📝 Implementation Notes
 
-- **Linked lists guarantee FIFO matching and O(1) cancellation**,  
-  which mirrors how real exchange matching engines manage order queues.
+* **Lazy heap cleanup**
+  When orders are fully matched or cancelled, the corresponding price may remain in
+  the heap. Instead of removing arbitrary elements (O(n)), the implementation
+  performs **lazy cleanup**:
+  stale prices are discarded when they reach the top of the heap.
+
+* **Price–time priority**
+  All orders at the same price are stored in a doubly linked list. New orders
+  are appended at the tail; matching always occurs from the head. This guarantees
+  FIFO within each price level.
+
+* **Single instrument**
+  The current implementation maintains a single order book (one instrument).
+  Extending this to multiple instruments would typically involve a
+  `Dict[symbol, OrderBook]` and routing logic on top.
+

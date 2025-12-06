@@ -166,14 +166,17 @@ class OrderBook:
         until it is fully filled or book is empty. Any remaining quantity is discarded.
         """
         if order_id is None:
-            order_id = next(self._order_id_counter)
+            order_id = self._next_free_id()
+        else:
+            if order_id in self.order_map:
+                raise ValueError(f"Order ID {order_id} already exists in the order book.")
+
         if timestamp is None:
             timestamp = time.time()
 
         order = Order(order_id, side, price=None, quantity=quantity, timestamp=timestamp)
         self._match(order)
 
-        # No resting, ignore any remaining quantities
         return order_id
 
     def cancel_order(self, order_id: int) -> bool:
