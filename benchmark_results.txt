@@ -1,0 +1,1 @@
+[2025-12-06T12:15:48] num_orders=100,000, elapsed=0.4439s, throughput≈225,267 orders/s
