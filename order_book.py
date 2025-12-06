@@ -18,6 +18,9 @@ class Side(Enum):
     BUY = auto()
     SELL = auto()
 
+    def opposite(self) -> "Side":
+        return Side.BUY if self is Side.SELL else Side.SELL
+
 
 @dataclass
 class Order:
@@ -454,11 +457,3 @@ class OrderBook:
                 timestamp=ts,
             )
         )
-
-
-# Small helper: define opposite() method on Side
-def _side_opposite(self: Side) -> Side:
-    return Side.BUY if self == Side.SELL else Side.SELL
-
-
-setattr(Side, "opposite", _side_opposite)
