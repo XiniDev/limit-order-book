@@ -2,6 +2,9 @@
 
 #include <cstdint>
 #include <optional>
+#include <vector>
+#include <unordered_map>
+#include <queue>
 
 // -----------------------------------------------------------------------------
 // Simple single-instrument Limit Order Book (LOB).
@@ -10,6 +13,7 @@
 //   - Side   : buy/sell indicator
 //   - Order  : client-submitted limit/market order
 //   - Trade  : execution record
+//   - OrderBook : price–time priority matching engine
 //
 // This header contains data definitions only.
 // -----------------------------------------------------------------------------
@@ -65,24 +69,6 @@ struct Trade {
 };
 
 
-/**
- * @struct OrderNode
- * @brief Forward declaration for linked-list nodes storing resting orders.
- */
-struct OrderNode;
-
-
-/**
- * @struct PriceLevel
- * @brief FIFO queue of resting orders at a single price level.
- *
- * Implements a doubly linked list (head = oldest order, tail = newest).
- */
-struct PriceLevel {
-    OrderNode* head = nullptr;  ///< Pointer to the oldest resting order.
-    OrderNode* tail = nullptr;  ///< Pointer to the most recent resting order.
-};
-
 
 /**
  * @struct OrderNode
@@ -100,6 +86,98 @@ struct OrderNode {
     OrderNode* prev = nullptr;  ///< Previous node in the FIFO queue.
     OrderNode* next = nullptr;  ///< Next node in the FIFO queue.
 };
+
+
+/**
+ * @struct PriceLevel
+ * @brief FIFO queue of resting orders at a single price level.
+ *
+ * Implements a doubly linked list (head = oldest order, tail = newest).
+ */
+struct PriceLevel {
+    OrderNode* head = nullptr;  ///< Pointer to the oldest resting order.
+    OrderNode* tail = nullptr;  ///< Pointer to the most recent resting order.
+};
+
+
+/**
+ * @class OrderBook
+ * @brief Core limit order book implementation using price–time priority.
+ *
+ * Matching rules:
+ *  - Better prices are matched first.
+ *  - Within the same price level, orders match in FIFO order.
+ *
+ * Internal data structures:
+ *  - bids_/asks_         : price -> PriceLevel (linked list of resting orders)
+ *  - bid_heap_/ask_heap_ : heaps for fast best bid/ask lookup
+ *  - order_map_          : order_id -> OrderInfo for O(1) cancellation
+ *
+ * This class mirrors the interface of the Python version while using
+ * efficient C++ data structures for O(1) cancellation and O(log n) best-price
+ * queries.
+ */
+class OrderBook {
+
+
+public:
+    using Price    = double;        ///< Price type for orders and trades.
+    using Quantity = std::int64_t;  ///< Quantity type (integer units).
+    using OrderId  = std::int64_t;  ///< Unique order identifier.
+
+    // Public API ... added later ...
+
+
+private:
+    /** @brief Mapping from price -> resting orders at that price. */
+    using PriceMap = std::unordered_map<Price, PriceLevel>;
+
+    /** @brief Max-heap for bid prices (default priority_queue). */
+    using PriceQueue = std::priority_queue<Price>;
+
+    /** @brief Min-heap for ask prices (via greater<> comparator). */
+    using MinPriceQueue =
+        std::priority_queue<Price, std::vector<Price>, std::greater<Price>>;
+
+    /**
+     * @struct OrderInfo
+     * @brief Metadata stored for each active order to support O(1) cancel.
+     *
+     * Contains:
+     *  - side  : Buy or Sell
+     *  - price : Resting price level
+     *  - node  : Pointer to the linked-list node storing the order
+     */
+    struct OrderInfo {
+        Side       side;   ///< Buy or Sell.
+        Price      price;  ///< Resting price of the order.
+        OrderNode* node;   ///< Pointer to node in PriceLevel queue.
+    };
+
+    // -------------------------------------------------------------------------
+    // Internal state
+    // -------------------------------------------------------------------------
+
+    PriceMap bids_;   ///< Bid-side price levels (price -> FIFO queue).
+    PriceMap asks_;   ///< Ask-side price levels (price -> FIFO queue).
+
+    PriceQueue    bid_heap_; ///< Best-bid lookup via max-heap.
+    MinPriceQueue ask_heap_; ///< Best-ask lookup via min-heap.
+
+    std::unordered_map<OrderId, OrderInfo>
+        order_map_; ///< order_id -> order metadata (for O(1) cancel).
+
+    std::vector<Trade> trades_; ///< Log of executed trades.
+
+    OrderId next_order_id_ = 1; ///< Monotonic order ID generator.
+
+
+private:
+    // Internal helper methods (implemented in order_book.cpp) ... added later ...
+
+
+};
+
 
 
 } // namespace lob
