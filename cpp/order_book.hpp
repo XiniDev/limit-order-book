@@ -109,30 +109,122 @@ struct PriceLevel {
  *  - Within the same price level, orders match in FIFO order.
  *
  * Internal data structures:
- *  - bids_/asks_         : price -> PriceLevel (linked list of resting orders)
- *  - bid_heap_/ask_heap_ : heaps for fast best bid/ask lookup
- *  - order_map_          : order_id -> OrderInfo for O(1) cancellation
+ *  - bids_/asks_          : price -> PriceLevel (FIFO queue of resting orders)
+ *  - bid_heap_/ask_heap_  : heaps for fast best-bid / best-ask lookup
+ *  - order_map_           : order_id -> OrderInfo for O(1) cancellation
  *
- * This class mirrors the interface of the Python version while using
- * efficient C++ data structures for O(1) cancellation and O(log n) best-price
- * queries.
+ * The public API mirrors the Python version, while leveraging efficient C++
+ * data structures for O(1) cancellation and O(log n) best-price queries.
  */
 class OrderBook {
-
 
 public:
     using Price    = double;        ///< Price type for orders and trades.
     using Quantity = std::int64_t;  ///< Quantity type (integer units).
     using OrderId  = std::int64_t;  ///< Unique order identifier.
 
-    // Public API ... added later ...
+    // -------------------------------------------------------------------------
+    // Public API
+    // -------------------------------------------------------------------------
 
+    /**
+     * @brief Add a limit order and immediately match against the opposite side.
+     *
+     * If order_id is not supplied, a new monotonic ID is generated.
+     *
+     * @param side     Buy or Sell.
+     * @param price    Limit price.
+     * @param quantity Order quantity.
+     * @param order_id Optional externally supplied order ID.
+     * @param ts_ns    Optional timestamp in nanoseconds.
+     *
+     * @return The assigned order ID.
+     */
+    OrderId addLimitOrder(
+        Side side,
+        Price price,
+        Quantity quantity,
+        std::optional<OrderId> order_id   = std::nullopt,
+        std::optional<std::int64_t> ts_ns = std::nullopt
+    );
+
+    /**
+     * @brief Add a market order (no price limit).
+     *
+     * The order matches against resting orders until fully filled or the book is
+     * empty. Any remaining quantity is discarded (market orders never rest).
+     *
+     * @param side     Buy or Sell.
+     * @param quantity Order quantity.
+     * @param order_id Optional externally supplied order ID.
+     * @param ts_ns    Optional timestamp in nanoseconds.
+     *
+     * @return The assigned order ID.
+     */
+    OrderId addMarketOrder(
+        Side side,
+        Quantity quantity,
+        std::optional<OrderId> order_id   = std::nullopt,
+        std::optional<std::int64_t> ts_ns = std::nullopt
+    );
+
+    /**
+     * @brief Cancel an existing resting order.
+     *
+     * Removes the order from its price level queue and the internal maps.
+     *
+     * @param id Order ID to cancel.
+     *
+     * @return true if the order was cancelled, false if not found or already filled.
+     */
+    bool cancelOrder(OrderId id);
+
+    /**
+     * @brief Return the best bid as (price, total_quantity).
+     *
+     * @return std::nullopt if no bids exist.
+     */
+    std::optional<std::pair<Price, Quantity>> bestBid() const;
+
+    /**
+     * @brief Return the best ask as (price, total_quantity).
+     *
+     * @return std::nullopt if no asks exist.
+     */
+    std::optional<std::pair<Price, Quantity>> bestAsk() const;
+
+    /**
+     * @brief Get the top N price levels on a given side (best to worst).
+     *
+     * @param side   Buy or Sell.
+     * @param levels Maximum number of levels to return.
+     *
+     * @return Vector of (price, total_quantity).
+     */
+    std::vector<std::pair<Price, Quantity>>
+    getDepth(Side side, std::size_t levels = 5) const;
+
+    /**
+     * @brief Access the list of all trades executed so far.
+     *
+     * @return Reference to internal trade log.
+     */
+    const std::vector<Trade>& trades() const noexcept { return trades_; }
+
+    /**
+     * @brief Reset the book: remove all orders, trades, and price levels.
+     */
+    void clear();
 
 private:
-    /** @brief Mapping from price -> resting orders at that price. */
+    // -------------------------------------------------------------------------
+    // Internal Types
+    // -------------------------------------------------------------------------
+
+    /** @brief Mapping from price → PriceLevel. */
     using PriceMap = std::unordered_map<Price, PriceLevel>;
 
-    /** @brief Max-heap for bid prices (default priority_queue). */
+    /** @brief Max-heap for bid prices. */
     using PriceQueue = std::priority_queue<Price>;
 
     /** @brief Min-heap for ask prices (via greater<> comparator). */
@@ -146,38 +238,82 @@ private:
      * Contains:
      *  - side  : Buy or Sell
      *  - price : Resting price level
-     *  - node  : Pointer to the linked-list node storing the order
+     *  - node  : Pointer to the linked-list node that holds the order
      */
     struct OrderInfo {
         Side       side;   ///< Buy or Sell.
-        Price      price;  ///< Resting price of the order.
-        OrderNode* node;   ///< Pointer to node in PriceLevel queue.
+        Price      price;  ///< Resting price.
+        OrderNode* node;   ///< Node containing the order.
     };
 
     // -------------------------------------------------------------------------
-    // Internal state
+    // Internal State
     // -------------------------------------------------------------------------
 
-    PriceMap bids_;   ///< Bid-side price levels (price -> FIFO queue).
-    PriceMap asks_;   ///< Ask-side price levels (price -> FIFO queue).
+    PriceMap bids_;   ///< Bid-side price → FIFO queue of orders.
+    PriceMap asks_;   ///< Ask-side price → FIFO queue of orders.
 
-    PriceQueue    bid_heap_; ///< Best-bid lookup via max-heap.
-    MinPriceQueue ask_heap_; ///< Best-ask lookup via min-heap.
+    PriceQueue    bid_heap_; ///< Max-heap for best-bid lookup.
+    MinPriceQueue ask_heap_; ///< Min-heap for best-ask lookup.
 
     std::unordered_map<OrderId, OrderInfo>
-        order_map_; ///< order_id -> order metadata (for O(1) cancel).
+        order_map_; ///< Active order metadata for O(1) cancel.
 
     std::vector<Trade> trades_; ///< Log of executed trades.
 
     OrderId next_order_id_ = 1; ///< Monotonic order ID generator.
 
-
 private:
-    // Internal helper methods (implemented in order_book.cpp) ... added later ...
+    // -------------------------------------------------------------------------
+    // Internal Helpers (defined in order_book.cpp)
+    // -------------------------------------------------------------------------
 
+    PriceMap&       book(Side side);
+    const PriceMap& book(Side side) const;
 
+    /**
+     * @brief Add a price level to the appropriate heap.
+     */
+    void pushPrice(Price price, Side side);
+
+    /**
+     * @brief Return best price without removing it (lazy cleanup applied).
+     */
+    std::optional<Price> peekBestPrice(Side side) const;
+
+    /**
+     * @brief Pop and return best price, ensuring the level has liquidity.
+     */
+    std::optional<Price> popBestPrice(Side side);
+
+    /**
+     * @brief Sum the total resting quantity at a given price level.
+     */
+    static Quantity sumLevelQuantity(const PriceLevel& level);
+
+    /**
+     * @brief Generate the next unused order ID.
+     */
+    OrderId nextFreeId();
+
+    /**
+     * @brief Core matching routine for an incoming order.
+     */
+    void matchIncoming(Order& incoming);
+
+    /**
+     * @brief Add a remaining (unmatched) portion of an order to the book.
+     */
+    void addRestingOrder(const Order& order);
+
+    /**
+     * @brief Record a trade event between two orders.
+     */
+    void recordTrade(const Order& incoming,
+                     const Order& resting,
+                     Price price,
+                     Quantity qty);
 };
-
 
 
 } // namespace lob
