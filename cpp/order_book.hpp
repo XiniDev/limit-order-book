@@ -64,4 +64,42 @@ struct Trade {
     std::int64_t timestamp;      ///< Match timestamp.
 };
 
+
+/**
+ * @struct OrderNode
+ * @brief Forward declaration for linked-list nodes storing resting orders.
+ */
+struct OrderNode;
+
+
+/**
+ * @struct PriceLevel
+ * @brief FIFO queue of resting orders at a single price level.
+ *
+ * Implements a doubly linked list (head = oldest order, tail = newest).
+ */
+struct PriceLevel {
+    OrderNode* head = nullptr;  ///< Pointer to the oldest resting order.
+    OrderNode* tail = nullptr;  ///< Pointer to the most recent resting order.
+};
+
+
+/**
+ * @struct OrderNode
+ * @brief Node in the doubly linked list representing a single resting order.
+ *
+ * Each node stores:
+ *  - The order itself
+ *  - prev pointer (toward older orders)
+ *  - next pointer (toward newer orders)
+ *
+ * Used to support O(1) insertion and cancellation.
+ */
+struct OrderNode {
+    Order      order;           ///< The resting order stored at this node.
+    OrderNode* prev = nullptr;  ///< Previous node in the FIFO queue.
+    OrderNode* next = nullptr;  ///< Next node in the FIFO queue.
+};
+
+
 } // namespace lob
