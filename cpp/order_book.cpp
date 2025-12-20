@@ -370,18 +370,31 @@ std::optional<OrderBook::Price> OrderBook::peekBestPrice(Side side) const {
 
 std::optional<OrderBook::Price> OrderBook::popBestPrice(Side side) {
     PriceMap& book_side = book(side);
-    auto& heap = (side == Side::Buy) ? bid_heap_ : ask_heap_;
 
-    // Heaps may contain stale prices; skip until valid level found.
-    while (!heap.empty()) {
-        Price p = heap.top();
-        heap.pop();
+    if (side == Side::Buy) {
+        // Max-heap (best bid)
+        while (!bid_heap_.empty()) {
+            Price p = bid_heap_.top();
+            bid_heap_.pop();
 
-        auto it = book_side.find(p);
-        if (it != book_side.end() && it->second.head != nullptr) {
-            return p;
+            auto it = book_side.find(p);
+            if (it != book_side.end() && it->second.head != nullptr) {
+                return p;
+            }
+        }
+    } else {
+        // Min-heap (best ask)
+        while (!ask_heap_.empty()) {
+            Price p = ask_heap_.top();
+            ask_heap_.pop();
+
+            auto it = book_side.find(p);
+            if (it != book_side.end() && it->second.head != nullptr) {
+                return p;
+            }
         }
     }
+
     return std::nullopt;
 }
 
