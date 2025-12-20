@@ -77,7 +77,7 @@ OrderBook::OrderId OrderBook::addMarketOrder(
     }
     std::int64_t ts = ts_ns.value_or(now_ts());
 
-    Order order{ id, side, price, quantity, ts };
+    Order order{ id, side, std::nullopt, quantity, ts };
     matchIncoming(order);
 
     return id;
@@ -134,9 +134,9 @@ OrderBook::bestBid() const
     Price price = *price_opt;
     const auto& book_side = book(Side::Buy);
 
-    auto it = book_side.at(price);
+    const PriceLevel &level = book_side.at(price);
 
-    return { { price, sumLevelQuantity(it->second) } };
+    return { { price, sumLevelQuantity(level) } };
 }
 
 std::optional<std::pair<OrderBook::Price, OrderBook::Quantity>>
@@ -148,9 +148,9 @@ OrderBook::bestAsk() const
     Price price = *price_opt;
     const auto& book_side = book(Side::Sell);
 
-    auto it = book_side.at(price);
+    const PriceLevel &level = book_side.at(price);
 
-    return { { price, sumLevelQuantity(it->second) } };
+    return { { price, sumLevelQuantity(level) } };
 }
 
 
