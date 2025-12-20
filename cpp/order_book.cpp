@@ -249,6 +249,72 @@ OrderBook::OrderId OrderBook::nextFreeId() {
     return next_order_id_++;
 }
 
+
+void OrderBook::matchIncoming(Order& incoming) {
+    // Check whether the incoming order crosses the best price.
+    auto price_ok = [&](Price best_price) {
+        if (!incoming.price) return true; // market order
+        double limit = *incoming.price;
+        return (incoming.side == Side::Buy) ? (best_price <= limit)
+                                            : (best_price >= limit);
+    };
+
+    Side opp = opposite(incoming.side);
+    PriceMap& opp_book = book(opp);
+
+    while (incoming.quantity > 0) {
+        auto best_price_opt = popBestPrice(opp);
+        if (!best_price_opt) break;
+
+        Price best_price = *best_price_opt;
+
+        // No acceptable price
+        if (!price_ok(best_price)) {
+            pushPrice(best_price, opp);
+            break;
+        }
+
+        auto lvl_it = opp_book.find(best_price);
+        if (lvl_it == opp_book.end() || !lvl_it->second.head) {
+            continue;
+        }
+
+        PriceLevel& level = lvl_it->second;
+
+        // FIFO matching
+        while (level.head && incoming.quantity > 0) {
+            OrderNode* node = level.head;
+            Order& resting = node->order;
+
+            Quantity qty = std::min(incoming.quantity, resting.quantity);
+            recordTrade(incoming, resting, best_price, qty);
+
+            incoming.quantity -= qty;
+            resting.quantity  -= qty;
+
+            // Remove fully filled resting order
+            if (resting.quantity == 0) {
+                OrderNode* next = node->next;
+                level.head = next;
+                if (next) next->prev = nullptr;
+                else      level.tail = nullptr;
+
+                order_map_.erase(resting.order_id);
+                delete node;
+            }
+        }
+
+        // Remove empty price level
+        if (!level.head) {
+            opp_book.erase(best_price);
+        } else {
+            // Still liquidity; put price level back into heap
+            pushPrice(best_price, opp);
+        }
+    }
+}
+
+
 // NOT FINISHED
 
 
