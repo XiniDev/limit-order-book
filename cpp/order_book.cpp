@@ -355,7 +355,7 @@ void OrderBook::pushPrice(Price price, Side side) {
 
 std::optional<OrderBook::Price> OrderBook::peekBestPrice(Side side) const {
     // peekBestPrice() requires removing stale prices,
-    // which is done in popBestPrice(),
+    // which is done in popBestPrice(), - shouldbt be done in pop actually... i need to fix
     // peek should not actually consume the price.
     auto* self = const_cast<OrderBook*>(this);
 
@@ -371,6 +371,7 @@ std::optional<OrderBook::Price> OrderBook::peekBestPrice(Side side) const {
 std::optional<OrderBook::Price> OrderBook::popBestPrice(Side side) {
     PriceMap& book_side = book(side);
 
+    // Heaps may contain stale prices; skip until valid level found.
     if (side == Side::Buy) {
         // Max-heap (best bid)
         while (!bid_heap_.empty()) {
@@ -397,6 +398,7 @@ std::optional<OrderBook::Price> OrderBook::popBestPrice(Side side) {
 
     return std::nullopt;
 }
+
 
 
 // NOT FINISHED
