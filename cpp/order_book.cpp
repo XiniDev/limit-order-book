@@ -315,6 +315,37 @@ void OrderBook::matchIncoming(Order& incoming) {
 }
 
 
+void OrderBook::addRestingOrder(const Order& order) {
+    if (!order.price) {
+        throw std::runtime_error("Resting market orders are not supported");
+    }
+
+    Price p = *order.price;
+    PriceMap& book_side = book(order.side);
+
+    // Get or create new price level
+    auto [it, created] = book_side.try_emplace(p, PriceLevel{});
+    PriceLevel& level = it->second;
+
+    if (created) {
+        pushPrice(p, order.side);
+    }
+
+    // FIFO
+    OrderNode* node = new OrderNode{order, nullptr, nullptr};
+
+    if (!level.tail) {
+        level.head = level.tail = node;
+    } else {
+        level.tail->next = node;
+        node->prev = level.tail;
+        level.tail = node;
+    }
+
+    order_map_[order.order_id] = OrderInfo{order.side, p, node};
+}
+
+
 // NOT FINISHED
 
 
