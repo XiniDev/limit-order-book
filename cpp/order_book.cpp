@@ -346,6 +346,13 @@ void OrderBook::addRestingOrder(const Order& order) {
 }
 
 
+void OrderBook::pushPrice(Price price, Side side) {
+    // No reverse vs Python (heaps are already max and min)
+    if (side == Side::Buy) bid_heap_.push(price);
+    else                   ask_heap_.push(price);
+}
+
+
 // NOT FINISHED
 
 
