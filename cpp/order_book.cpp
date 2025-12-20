@@ -36,7 +36,7 @@ OrderBook::OrderId OrderBook::addLimitOrder(
         id = nextFreeId();
     } else {
         id = *order_id;
-        if (order_map_.contains(id)) {
+        if (order_map_.find(id) != order_map_.end()) {
             throw std::invalid_argument(
                 "Order ID" + std::to_string(id)
                 + "already exists in the order book"
@@ -68,7 +68,7 @@ OrderBook::OrderId OrderBook::addMarketOrder(
         id = nextFreeId();
     } else {
         id = *order_id;
-        if (order_map_.contains(id)) {
+        if (order_map_.find(id) != order_map_.end()) {
             throw std::invalid_argument(
                 "Order ID" + std::to_string(id)
                 + "already exists in the order book"
@@ -243,7 +243,7 @@ OrderBook::Quantity OrderBook::sumLevelQuantity(const PriceLevel& level) {
 
 OrderBook::OrderId OrderBook::nextFreeId() {
     // Increment until an unused ID is found.
-    while (order_map_.contains(next_order_id_)) {
+    while (order_map_.find(next_order_id_) != order_map_.end()) {
         ++next_order_id_;
     }
     return next_order_id_++;
