@@ -181,7 +181,7 @@ OrderBook::getDepth(Side side, std::size_t levels) const
 
     for (std::size_t i = 0; i < count; ++i) {
         Price p = prices[i];
-        const PriceLevel& level = side_book.at(p);
+        const PriceLevel& level = book_side.at(p);
         result.emplace_back(p, sumLevelQuantity(level));
     }
 
