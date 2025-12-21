@@ -1,0 +1,14 @@
+# Build artifacts
+/build/
+/*.o
+/*.out
+/*.exe
+lob_demo
+
+# macOS
+.DS_Store
+*.dSYM/
+
+# Editor
+.vscode/
+.idea/
