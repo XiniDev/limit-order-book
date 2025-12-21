@@ -385,21 +385,6 @@ std::optional<OrderBook::Price> OrderBook::peekBestPrice(Side side) const {
 }
 
 
-// std::optional<OrderBook::Price> OrderBook::peekBestPrice(Side side) const {
-//     // peekBestPrice() requires removing stale prices,
-//     // which is done in popBestPrice(), - shouldbt be done in pop actually... i need to fix
-//     // peek should not actually consume the price.
-//     auto* self = const_cast<OrderBook*>(this);
-
-//     auto price_opt = self->popBestPrice(side);
-//     if (!price_opt) return std::nullopt;
-
-//     // Put it back (lazy cleanup)
-//     self->pushPrice(*price_opt, side);
-//     return price_opt;
-// }
-
-
 std::optional<OrderBook::Price> OrderBook::popBestPrice(Side side) {
     PriceMap& book_side = book(side);
 
