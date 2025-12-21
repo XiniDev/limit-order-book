@@ -388,9 +388,7 @@ std::optional<OrderBook::Price> OrderBook::peekBestPrice(Side side) const {
 std::optional<OrderBook::Price> OrderBook::popBestPrice(Side side) {
     PriceMap& book_side = book(side);
 
-    // Heaps may contain stale prices; skip until valid level found.
     if (side == Side::Buy) {
-        // Max-heap (best bid)
         while (!bid_heap_.empty()) {
             Price p = bid_heap_.top();
             bid_heap_.pop();
@@ -401,7 +399,6 @@ std::optional<OrderBook::Price> OrderBook::popBestPrice(Side side) {
             }
         }
     } else {
-        // Min-heap (best ask)
         while (!ask_heap_.empty()) {
             Price p = ask_heap_.top();
             ask_heap_.pop();
@@ -417,8 +414,26 @@ std::optional<OrderBook::Price> OrderBook::popBestPrice(Side side) {
 }
 
 
+void OrderBook::recordTrade(const Order& incoming,
+                            const Order& resting,
+                            Price price,
+                            Quantity qty)
+{
+    // Determine correct buy/sell IDs based on trade direction
+    std::int64_t buy_id =
+        (incoming.side == Side::Buy) ? incoming.order_id : resting.order_id;
 
-// NOT FINISHED
+    std::int64_t sell_id =
+        (incoming.side == Side::Sell) ? incoming.order_id : resting.order_id;
+
+    trades_.push_back(Trade{
+        buy_id,
+        sell_id,
+        price,
+        qty,
+        now_ts()
+    });
+}
 
 
 } // namespace lob
