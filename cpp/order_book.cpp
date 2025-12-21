@@ -354,18 +354,50 @@ void OrderBook::pushPrice(Price price, Side side) {
 
 
 std::optional<OrderBook::Price> OrderBook::peekBestPrice(Side side) const {
-    // peekBestPrice() requires removing stale prices,
-    // which is done in popBestPrice(), - shouldbt be done in pop actually... i need to fix
-    // peek should not actually consume the price.
     auto* self = const_cast<OrderBook*>(this);
+    PriceMap& book_side = self->book(side);
 
-    auto price_opt = self->popBestPrice(side);
-    if (!price_opt) return std::nullopt;
+    if (side == Side::Buy) {
+        while (!self->bid_heap_.empty()) {
+            Price p = self->bid_heap_.top();
 
-    // Put it back (lazy cleanup)
-    self->pushPrice(*price_opt, side);
-    return price_opt;
+            auto it = book_side.find(p);
+            if (it != book_side.end() && it->second.head != nullptr) {
+                return p;
+            }
+
+            self->bid_heap_.pop();
+        }
+    } else {
+        while (!self->ask_heap_.empty()) {
+            Price p = self->ask_heap_.top();
+
+            auto it = book_side.find(p);
+            if (it != book_side.end() && it->second.head != nullptr) {
+                return p;
+            }
+
+            self->ask_heap_.pop();
+        }
+    }
+
+    return std::nullopt;
 }
+
+
+// std::optional<OrderBook::Price> OrderBook::peekBestPrice(Side side) const {
+//     // peekBestPrice() requires removing stale prices,
+//     // which is done in popBestPrice(), - shouldbt be done in pop actually... i need to fix
+//     // peek should not actually consume the price.
+//     auto* self = const_cast<OrderBook*>(this);
+
+//     auto price_opt = self->popBestPrice(side);
+//     if (!price_opt) return std::nullopt;
+
+//     // Put it back (lazy cleanup)
+//     self->pushPrice(*price_opt, side);
+//     return price_opt;
+// }
 
 
 std::optional<OrderBook::Price> OrderBook::popBestPrice(Side side) {
