@@ -3,6 +3,8 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
+#include <locale>
 #include <random>
 #include <sstream>
 #include <string>
@@ -32,6 +34,13 @@ static std::string iso_timestamp_seconds_local() {
 static void run_benchmark(std::int64_t num_orders = 100'000,
                           const std::string& output_path = "benchmark_results.txt")
 {
+    try {
+        std::locale loc("");
+        std::cout.imbue(loc);
+    } catch (const std::exception&) {
+        // Fallback: no separators if locale isn't available.
+    }
+
     OrderBook ob;
 
     // Seed for reproducibility
@@ -58,8 +67,9 @@ static void run_benchmark(std::int64_t num_orders = 100'000,
     std::chrono::duration<double> elapsed = end - start;
 
     const double seconds = elapsed.count();
-    const double orders_per_second = (seconds > 0.0) ? (static_cast<double>(num_orders) / seconds)
-                                                     : std::numeric_limits<double>::infinity();
+    const double orders_per_second =
+        (seconds > 0.0) ? (static_cast<double>(num_orders) / seconds)
+                        : std::numeric_limits<double>::infinity();
 
     // Console output
     std::cout << "Processed " << num_orders << " orders in "
@@ -67,12 +77,19 @@ static void run_benchmark(std::int64_t num_orders = 100'000,
     std::cout << "≈ " << std::fixed << std::setprecision(0) << orders_per_second
               << " orders/second\n";
 
-    // Append to text file (like Python)
+    // Append to text file
     const std::string timestamp = iso_timestamp_seconds_local();
     std::ofstream f(output_path, std::ios::app);
     if (!f) {
         std::cerr << "Warning: failed to open output file: " << output_path << "\n";
         return;
+    }
+
+    try {
+        std::locale loc("");
+        f.imbue(loc);
+    } catch (const std::exception&) {
+        // If locale isn't available, file output will be plain numbers.
     }
 
     f << "[" << timestamp << "] "
